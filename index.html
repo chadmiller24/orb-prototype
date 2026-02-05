@@ -22,9 +22,6 @@
       background: #000;
       min-height: 100vh;
       font-family: 'Neue Haas Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
-      display: flex;
-      justify-content: center;
-      align-items: center;
       overflow: hidden;
       cursor: grab;
     }
@@ -33,62 +30,10 @@
       cursor: grabbing;
     }
 
-    .scene {
-      width: 600px;
-      height: 600px;
-      perspective: 1000px;
-      position: relative;
-    }
-
-    .sphere {
+    #canvas {
       width: 100%;
-      height: 100%;
-      position: relative;
-      transform-style: preserve-3d;
-    }
-
-    .text-line {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      color: #fff;
-      font-weight: 500;
-      white-space: nowrap;
-      transform-style: preserve-3d;
-      /* Allow back text to show through */
-      backface-visibility: visible;
-    }
-
-    /* Glass orb overlay */
-    .orb-glass {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      width: 480px;
-      height: 480px;
-      transform: translate(-50%, -50%);
-      border-radius: 50%;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      box-shadow:
-        inset 0 0 120px rgba(0, 0, 0, 0.4);
-      pointer-events: none;
-      z-index: 1000;
-    }
-
-    .orb-glass::before {
-      content: '';
-      position: absolute;
-      top: 8%;
-      left: 15%;
-      width: 30%;
-      height: 20%;
-      background: radial-gradient(
-        ellipse,
-        rgba(255, 255, 255, 0.1) 0%,
-        transparent 70%
-      );
-      border-radius: 50%;
-      filter: blur(10px);
+      height: 100vh;
+      display: block;
     }
 
     /* Header */
@@ -149,12 +94,7 @@
 
   <div class="menu">Menu</div>
 
-  <div class="scene" id="scene">
-    <div class="sphere" id="sphere">
-      <!-- Text lines will be added by JavaScript -->
-    </div>
-    <div class="orb-glass"></div>
-  </div>
+  <canvas id="canvas"></canvas>
 
   <div class="footer">
     <p>Manage how your brand appears to the millions of users shopping in AI chats. Your products are discoverable right in ChatGPT, Copilot, and Perplexity.</p>
@@ -162,143 +102,70 @@
 
   <div class="hint">Drag to spin</div>
 
-  <script>
-    const sphere = document.getElementById('sphere');
-    const scene = document.getElementById('scene');
-
-    // Content lines
-    const contentLines = [
-      "Payment method customization",
-      "Shop Cash rewards program",
-      "Extended warranty options",
-      "Flexible inventory transfers",
-      "Updated metrics and widgets",
-      "Monitor your store from your wrist",
-      "Create fully functional admin applications",
-      "through simple conversations with Sidekick",
-      "starting with custom discount functions.",
-      "No coding knowledge required.",
-      "Earn 1% Shop Cash exclusively on purchases",
-      "made in the Shop app with extended expiry",
-      "updates, making rewards more accessible and",
-      "valuable for your customers.",
-      "Custom Shop app URLs",
-    ];
-
-    const RADIUS = 240;
-    const TOTAL_RINGS = 15;
-
-    // Create text positioned on sphere surface
-    function createTextLines() {
-      for (let i = 0; i < TOTAL_RINGS; i++) {
-        // Distribute lines from top to bottom of sphere
-        // phi goes from ~20° to ~160° (avoiding poles)
-        const phi = (Math.PI * 0.12) + (Math.PI * 0.76) * (i / (TOTAL_RINGS - 1));
-
-        const line = document.createElement('div');
-        line.className = 'text-line';
-        line.textContent = contentLines[i % contentLines.length];
-        line.dataset.phi = phi;
-        line.dataset.index = i;
-
-        sphere.appendChild(line);
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
       }
     }
+  </script>
 
-    createTextLines();
+  <script type="module">
+    import * as THREE from 'three';
 
-    let rotationX = -10;
+    const canvas = document.getElementById('canvas');
+
+    // Scene setup
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.z = 4;
+
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setClearColor(0x000000, 1);
+
+    // Load texture from Figma
+    const textureLoader = new THREE.TextureLoader();
+    const orbTexture = textureLoader.load('orb-texture.png');
+
+    // Create sphere with texture
+    const geometry = new THREE.SphereGeometry(1.5, 64, 64);
+    const material = new THREE.MeshBasicMaterial({
+      map: orbTexture,
+      transparent: true,
+      side: THREE.DoubleSide
+    });
+    const sphere = new THREE.Mesh(geometry, material);
+    scene.add(sphere);
+
+    // Glass overlay sphere (slightly larger)
+    const glassGeometry = new THREE.SphereGeometry(1.52, 64, 64);
+    const glassMaterial = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.03,
+      side: THREE.FrontSide
+    });
+    const glassSphere = new THREE.Mesh(glassGeometry, glassMaterial);
+    scene.add(glassSphere);
+
+    // Rotation state
+    let targetRotationX = 0;
+    let targetRotationY = 0;
+    let rotationX = 0;
     let rotationY = 0;
     let velocityX = 0;
-    let velocityY = 0.3;
+    let velocityY = 0.003;
     let isDragging = false;
-    let lastMouseX = 0;
-    let lastMouseY = 0;
-
-    function updateSphere() {
-      const lines = document.querySelectorAll('.text-line');
-      const radX = rotationX * Math.PI / 180;
-      const radY = rotationY * Math.PI / 180;
-
-      lines.forEach(line => {
-        const phi = parseFloat(line.dataset.phi);
-
-        // Position on sphere - theta is 0 (front-facing)
-        // We'll rotate the whole coordinate system instead
-        const baseY = RADIUS * Math.cos(phi);
-        const ringRadius = RADIUS * Math.sin(phi);
-        const baseX = 0;
-        const baseZ = ringRadius;
-
-        // Apply Y rotation (horizontal spin)
-        let x = baseX * Math.cos(radY) - baseZ * Math.sin(radY);
-        let z = baseX * Math.sin(radY) + baseZ * Math.cos(radY);
-        let y = baseY;
-
-        // Apply X rotation (vertical tilt)
-        const newY = y * Math.cos(radX) - z * Math.sin(radX);
-        const newZ = y * Math.sin(radX) + z * Math.cos(radX);
-        y = newY;
-        z = newZ;
-
-        // Calculate visual properties based on Z depth
-        const normalizedZ = (z + RADIUS) / (RADIUS * 2); // 0 = back, 1 = front
-
-        // Front text (z > 0): full opacity, larger
-        // Back text (z < 0): dimmer, smaller, appears reversed naturally via 3D
-        const isFront = z > 0;
-
-        let opacity, scale, fontSize;
-
-        if (isFront) {
-          // Front of sphere
-          opacity = 0.4 + normalizedZ * 0.6;
-          scale = 0.6 + normalizedZ * 0.5;
-          fontSize = 14 + normalizedZ * 10;
-        } else {
-          // Back of sphere - visible but dimmer
-          opacity = 0.1 + normalizedZ * 0.25;
-          scale = 0.4 + normalizedZ * 0.3;
-          fontSize = 12 + normalizedZ * 6;
-        }
-
-        // Calculate the rotation needed for the text to face outward on the sphere
-        // then the natural 3D perspective will make back text appear reversed
-        const angleY = Math.atan2(x, z) * (180 / Math.PI);
-
-        line.style.transform = `
-          translate(-50%, -50%)
-          translate3d(${x}px, ${y}px, ${z}px)
-          rotateY(${angleY}deg)
-        `;
-        line.style.opacity = opacity;
-        line.style.fontSize = `${fontSize}px`;
-        line.style.zIndex = Math.round(z + RADIUS);
-      });
-    }
-
-    function animate() {
-      if (!isDragging) {
-        rotationY += velocityY;
-        rotationX += velocityX;
-
-        velocityX *= 0.96;
-        velocityY *= 0.995;
-
-        if (Math.abs(velocityY) < 0.2) velocityY = 0.2;
-      }
-
-      rotationX = Math.max(-40, Math.min(40, rotationX));
-
-      updateSphere();
-      requestAnimationFrame(animate);
-    }
+    let previousMouseX = 0;
+    let previousMouseY = 0;
 
     // Mouse controls
-    scene.addEventListener('mousedown', (e) => {
+    canvas.addEventListener('mousedown', (e) => {
       isDragging = true;
-      lastMouseX = e.clientX;
-      lastMouseY = e.clientY;
+      previousMouseX = e.clientX;
+      previousMouseY = e.clientY;
       velocityX = 0;
       velocityY = 0;
     });
@@ -306,17 +173,17 @@
     document.addEventListener('mousemove', (e) => {
       if (!isDragging) return;
 
-      const deltaX = e.clientX - lastMouseX;
-      const deltaY = e.clientY - lastMouseY;
+      const deltaX = e.clientX - previousMouseX;
+      const deltaY = e.clientY - previousMouseY;
 
-      rotationY += deltaX * 0.4;
-      rotationX += deltaY * 0.3;
+      targetRotationY += deltaX * 0.005;
+      targetRotationX += deltaY * 0.005;
 
-      velocityY = deltaX * 0.15;
-      velocityX = deltaY * 0.1;
+      velocityY = deltaX * 0.002;
+      velocityX = deltaY * 0.002;
 
-      lastMouseX = e.clientX;
-      lastMouseY = e.clientY;
+      previousMouseX = e.clientX;
+      previousMouseY = e.clientY;
     });
 
     document.addEventListener('mouseup', () => {
@@ -324,10 +191,10 @@
     });
 
     // Touch support
-    scene.addEventListener('touchstart', (e) => {
+    canvas.addEventListener('touchstart', (e) => {
       isDragging = true;
-      lastMouseX = e.touches[0].clientX;
-      lastMouseY = e.touches[0].clientY;
+      previousMouseX = e.touches[0].clientX;
+      previousMouseY = e.touches[0].clientY;
       velocityX = 0;
       velocityY = 0;
     });
@@ -335,21 +202,60 @@
     document.addEventListener('touchmove', (e) => {
       if (!isDragging) return;
 
-      const deltaX = e.touches[0].clientX - lastMouseX;
-      const deltaY = e.touches[0].clientY - lastMouseY;
+      const deltaX = e.touches[0].clientX - previousMouseX;
+      const deltaY = e.touches[0].clientY - previousMouseY;
 
-      rotationY += deltaX * 0.4;
-      rotationX += deltaY * 0.3;
+      targetRotationY += deltaX * 0.005;
+      targetRotationX += deltaY * 0.005;
 
-      velocityY = deltaX * 0.15;
-      velocityX = deltaY * 0.1;
+      velocityY = deltaX * 0.002;
+      velocityX = deltaY * 0.002;
 
-      lastMouseX = e.touches[0].clientX;
-      lastMouseY = e.touches[0].clientY;
+      previousMouseX = e.touches[0].clientX;
+      previousMouseY = e.touches[0].clientY;
     });
 
     document.addEventListener('touchend', () => {
       isDragging = false;
+    });
+
+    // Animation loop
+    function animate() {
+      requestAnimationFrame(animate);
+
+      if (!isDragging) {
+        // Apply momentum
+        targetRotationY += velocityY;
+        targetRotationX += velocityX;
+
+        // Dampen velocity
+        velocityX *= 0.95;
+        velocityY *= 0.98;
+
+        // Minimum auto-rotation
+        if (Math.abs(velocityY) < 0.002) velocityY = 0.002;
+      }
+
+      // Clamp X rotation
+      targetRotationX = Math.max(-0.8, Math.min(0.8, targetRotationX));
+
+      // Smooth rotation
+      rotationX += (targetRotationX - rotationX) * 0.1;
+      rotationY += (targetRotationY - rotationY) * 0.1;
+
+      sphere.rotation.x = rotationX;
+      sphere.rotation.y = rotationY;
+      glassSphere.rotation.x = rotationX;
+      glassSphere.rotation.y = rotationY;
+
+      renderer.render(scene, camera);
+    }
+
+    // Handle resize
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
     animate();
