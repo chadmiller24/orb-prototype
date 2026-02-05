@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Orb Prototype</title>
+  <style>
+    @font-face {
+      font-family: 'Neue Haas Grotesk';
+      src: url('NHaasGroteskTXPro-65Md.ttf') format('truetype');
+      font-weight: 500;
+      font-style: normal;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #000;
+      min-height: 100vh;
+      font-family: 'Neue Haas Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+      cursor: grab;
+    }
+
+    body:active {
+      cursor: grabbing;
+    }
+
+    .scene {
+      width: 600px;
+      height: 600px;
+      perspective: 1000px;
+      position: relative;
+    }
+
+    .orb-container {
+      width: 100%;
+      height: 100%;
+      position: relative;
+      transform-style: preserve-3d;
+      transition: transform 0.1s ease-out;
+    }
+
+    /* The glass orb effect */
+    .orb {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 400px;
+      height: 400px;
+      transform: translate(-50%, -50%);
+      border-radius: 50%;
+      background: radial-gradient(
+        ellipse at 30% 30%,
+        rgba(255, 255, 255, 0.15) 0%,
+        rgba(255, 255, 255, 0.05) 30%,
+        rgba(0, 0, 0, 0.1) 60%,
+        rgba(0, 0, 0, 0.3) 100%
+      );
+      box-shadow:
+        inset -20px -20px 40px rgba(0, 0, 0, 0.5),
+        inset 20px 20px 40px rgba(255, 255, 255, 0.1),
+        0 0 60px rgba(255, 255, 255, 0.1);
+      pointer-events: none;
+      z-index: 100;
+    }
+
+    .orb::before {
+      content: '';
+      position: absolute;
+      top: 10%;
+      left: 15%;
+      width: 30%;
+      height: 20%;
+      background: radial-gradient(
+        ellipse,
+        rgba(255, 255, 255, 0.3) 0%,
+        transparent 70%
+      );
+      border-radius: 50%;
+      filter: blur(10px);
+    }
+
+    /* Text rings around the orb */
+    .text-ring {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform-style: preserve-3d;
+      pointer-events: none;
+    }
+
+    .text-item {
+      position: absolute;
+      color: #fff;
+      font-size: 18px;
+      font-weight: 500;
+      white-space: nowrap;
+      transform-origin: center center;
+      text-shadow: 0 0 10px rgba(0,0,0,0.8);
+      backface-visibility: hidden;
+    }
+
+    .text-item.back {
+      opacity: 0.3;
+    }
+
+    /* Header */
+    .header {
+      position: fixed;
+      top: 40px;
+      left: 40px;
+      color: #fff;
+      z-index: 200;
+    }
+
+    .header h1 {
+      font-size: 36px;
+      font-weight: 500;
+      line-height: 0.92;
+      letter-spacing: -1.08px;
+    }
+
+    .menu {
+      position: fixed;
+      top: 40px;
+      right: 40px;
+      color: #fff;
+      font-size: 36px;
+      font-weight: 500;
+      z-index: 200;
+    }
+
+    .footer {
+      position: fixed;
+      bottom: 40px;
+      left: 40px;
+      color: #fff;
+      max-width: 400px;
+      z-index: 200;
+    }
+
+    .footer p {
+      font-size: 18px;
+      line-height: 1.4;
+      opacity: 0.8;
+    }
+
+    .hint {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: #666;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Everywhere<br>Edition</h1>
+  </div>
+
+  <div class="menu">Menu</div>
+
+  <div class="scene" id="scene">
+    <div class="orb-container" id="orbContainer">
+      <!-- Text will be added by JavaScript -->
+    </div>
+    <div class="orb"></div>
+  </div>
+
+  <div class="footer">
+    <p>Manage how your brand appears to the millions of users shopping in AI chats. Your products are discoverable right in ChatGPT, Copilot, and Perplexity.</p>
+  </div>
+
+  <div class="hint">Drag to spin</div>
+
+  <script>
+    const orbContainer = document.getElementById('orbContainer');
+    const scene = document.getElementById('scene');
+
+    // Content items to display around the orb
+    const contentItems = [
+      "Earn 1% Shop Cash exclusively on purchases",
+      "Made in the Shop app with extended expiry",
+      "Updates, making rewards more accessible",
+      "And valuable for your customers.",
+      "Custom Shop app URLs",
+      "Create fully functional admin applications",
+      "Through simple conversations with Sidekick",
+      "Starting with custom discount functions",
+      "No coding knowledge required.",
+      "Payment method customization",
+      "Shop Cash rewards program",
+      "Extended warranty options",
+      "Flexible inventory transfers",
+      "Updated metrics and widgets",
+      "Monitor your store from your wrist"
+    ];
+
+    const RADIUS = 250;
+    const RINGS = 5;
+    const ITEMS_PER_RING = 3;
+
+    // Create text elements arranged in rings around the sphere
+    function createTextElements() {
+      contentItems.forEach((text, index) => {
+        const ringIndex = Math.floor(index / ITEMS_PER_RING);
+        const itemInRing = index % ITEMS_PER_RING;
+
+        // Vertical position (latitude)
+        const phi = (Math.PI / (RINGS + 1)) * (ringIndex + 1);
+
+        // Horizontal position (longitude)
+        const theta = (2 * Math.PI / ITEMS_PER_RING) * itemInRing + (ringIndex * 0.5);
+
+        const x = RADIUS * Math.sin(phi) * Math.cos(theta);
+        const y = RADIUS * Math.cos(phi);
+        const z = RADIUS * Math.sin(phi) * Math.sin(theta);
+
+        const textEl = document.createElement('div');
+        textEl.className = 'text-item';
+        textEl.textContent = text;
+        textEl.dataset.x = x;
+        textEl.dataset.y = y;
+        textEl.dataset.z = z;
+        textEl.dataset.theta = theta;
+        textEl.dataset.phi = phi;
+
+        orbContainer.appendChild(textEl);
+      });
+    }
+
+    createTextElements();
+
+    // Rotation state
+    let rotationX = -15;
+    let rotationY = 0;
+    let velocityX = 0;
+    let velocityY = 0.2; // Auto-rotate
+    let isDragging = false;
+    let lastMouseX = 0;
+    let lastMouseY = 0;
+
+    function updateTextPositions() {
+      const textItems = document.querySelectorAll('.text-item');
+      const radX = rotationX * Math.PI / 180;
+      const radY = rotationY * Math.PI / 180;
+
+      textItems.forEach(item => {
+        const origX = parseFloat(item.dataset.x);
+        const origY = parseFloat(item.dataset.y);
+        const origZ = parseFloat(item.dataset.z);
+
+        // Rotate around Y axis
+        let x = origX * Math.cos(radY) - origZ * Math.sin(radY);
+        let z = origX * Math.sin(radY) + origZ * Math.cos(radY);
+        let y = origY;
+
+        // Rotate around X axis
+        const tempY = y * Math.cos(radX) - z * Math.sin(radX);
+        const tempZ = y * Math.sin(radX) + z * Math.cos(radX);
+        y = tempY;
+        z = tempZ;
+
+        // Position and scale based on Z (depth)
+        const scale = (z + RADIUS * 1.5) / (RADIUS * 2);
+        const opacity = Math.max(0.1, Math.min(1, (z + RADIUS) / (RADIUS * 2)));
+
+        item.style.transform = `translate(-50%, -50%) translate3d(${x}px, ${y}px, ${z}px) scale(${0.5 + scale * 0.5})`;
+        item.style.opacity = opacity;
+        item.style.zIndex = Math.round(z + RADIUS);
+
+        // Fade text on back of sphere
+        if (z < -50) {
+          item.style.opacity = Math.max(0.1, opacity * 0.3);
+        }
+      });
+    }
+
+    function animate() {
+      if (!isDragging) {
+        // Apply auto-rotation and momentum
+        rotationY += velocityY;
+        rotationX += velocityX;
+
+        // Dampen velocity
+        velocityX *= 0.98;
+        velocityY *= 0.995;
+
+        // Minimum auto-rotation
+        if (Math.abs(velocityY) < 0.1) velocityY = 0.1;
+      }
+
+      // Clamp X rotation
+      rotationX = Math.max(-60, Math.min(60, rotationX));
+
+      orbContainer.style.transform = `rotateX(${rotationX}deg) rotateY(${rotationY}deg)`;
+      updateTextPositions();
+
+      requestAnimationFrame(animate);
+    }
+
+    // Mouse/touch controls
+    scene.addEventListener('mousedown', (e) => {
+      isDragging = true;
+      lastMouseX = e.clientX;
+      lastMouseY = e.clientY;
+      velocityX = 0;
+      velocityY = 0;
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+
+      const deltaX = e.clientX - lastMouseX;
+      const deltaY = e.clientY - lastMouseY;
+
+      rotationY += deltaX * 0.5;
+      rotationX += deltaY * 0.3;
+
+      velocityY = deltaX * 0.2;
+      velocityX = deltaY * 0.1;
+
+      lastMouseX = e.clientX;
+      lastMouseY = e.clientY;
+    });
+
+    document.addEventListener('mouseup', () => {
+      isDragging = false;
+    });
+
+    // Touch support
+    scene.addEventListener('touchstart', (e) => {
+      isDragging = true;
+      lastMouseX = e.touches[0].clientX;
+      lastMouseY = e.touches[0].clientY;
+      velocityX = 0;
+      velocityY = 0;
+    });
+
+    document.addEventListener('touchmove', (e) => {
+      if (!isDragging) return;
+
+      const deltaX = e.touches[0].clientX - lastMouseX;
+      const deltaY = e.touches[0].clientY - lastMouseY;
+
+      rotationY += deltaX * 0.5;
+      rotationX += deltaY * 0.3;
+
+      velocityY = deltaX * 0.2;
+      velocityX = deltaY * 0.1;
+
+      lastMouseX = e.touches[0].clientX;
+      lastMouseY = e.touches[0].clientY;
+    });
+
+    document.addEventListener('touchend', () => {
+      isDragging = false;
+    });
+
+    // Start animation
+    animate();
+  </script>
+</body>
+</html>
