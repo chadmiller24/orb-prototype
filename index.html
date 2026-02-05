@@ -34,65 +34,61 @@
     }
 
     .scene {
-      width: 700px;
-      height: 700px;
+      width: 600px;
+      height: 600px;
+      perspective: 1000px;
       position: relative;
-      display: flex;
-      justify-content: center;
-      align-items: center;
     }
 
-    .orb-container {
-      width: 500px;
-      height: 500px;
-      position: relative;
-      border-radius: 50%;
-      overflow: hidden;
-    }
-
-    /* The glass orb edge */
-    .orb-edge {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 500px;
-      height: 500px;
-      border-radius: 50%;
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      pointer-events: none;
-      z-index: 100;
-      box-shadow:
-        inset 0 0 100px rgba(0, 0, 0, 0.6);
-    }
-
-    /* Text container inside orb */
-    .text-container {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
+    .sphere {
       width: 100%;
       height: 100%;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-    }
-
-    /* Back text layer - mirrored */
-    .text-container.back {
-      transform: translate(-50%, -50%) scaleX(-1);
+      position: relative;
+      transform-style: preserve-3d;
     }
 
     .text-line {
       position: absolute;
+      top: 50%;
+      left: 50%;
       color: #fff;
       font-weight: 500;
       white-space: nowrap;
-      line-height: 1.3;
-      text-align: center;
+      transform-style: preserve-3d;
+      /* Allow back text to show through */
+      backface-visibility: visible;
+    }
+
+    /* Glass orb overlay */
+    .orb-glass {
+      position: absolute;
+      top: 50%;
       left: 50%;
+      width: 480px;
+      height: 480px;
+      transform: translate(-50%, -50%);
+      border-radius: 50%;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow:
+        inset 0 0 120px rgba(0, 0, 0, 0.4);
+      pointer-events: none;
+      z-index: 1000;
+    }
+
+    .orb-glass::before {
+      content: '';
+      position: absolute;
+      top: 8%;
+      left: 15%;
+      width: 30%;
+      height: 20%;
+      background: radial-gradient(
+        ellipse,
+        rgba(255, 255, 255, 0.1) 0%,
+        transparent 70%
+      );
+      border-radius: 50%;
+      filter: blur(10px);
     }
 
     /* Header */
@@ -154,15 +150,10 @@
   <div class="menu">Menu</div>
 
   <div class="scene" id="scene">
-    <div class="orb-container" id="orbContainer">
-      <div class="text-container back" id="backTextContainer">
-        <!-- Back text lines (mirrored) -->
-      </div>
-      <div class="text-container front" id="frontTextContainer">
-        <!-- Front text lines -->
-      </div>
+    <div class="sphere" id="sphere">
+      <!-- Text lines will be added by JavaScript -->
     </div>
-    <div class="orb-edge"></div>
+    <div class="orb-glass"></div>
   </div>
 
   <div class="footer">
@@ -172,8 +163,7 @@
   <div class="hint">Drag to spin</div>
 
   <script>
-    const frontTextContainer = document.getElementById('frontTextContainer');
-    const backTextContainer = document.getElementById('backTextContainer');
+    const sphere = document.getElementById('sphere');
     const scene = document.getElementById('scene');
 
     // Content lines
@@ -193,138 +183,139 @@
       "updates, making rewards more accessible and",
       "valuable for your customers.",
       "Custom Shop app URLs",
-      "Earn 1% Shop Cash exclusively on purchases",
-      "made in the Shop app with extended expiry",
-      "updates, making rewards more accessible",
-      "and valuable for your customers.",
     ];
 
-    const ORB_RADIUS = 250;
-    const LINE_HEIGHT = 30;
-    let scrollY = 0;
-    let velocityY = 0.4;
-    let isDragging = false;
-    let lastMouseY = 0;
+    const RADIUS = 240;
+    const TOTAL_RINGS = 15;
 
-    // Create text lines for both front and back
+    // Create text positioned on sphere surface
     function createTextLines() {
-      const totalLines = contentLines.length * 2;
+      for (let i = 0; i < TOTAL_RINGS; i++) {
+        // Distribute lines from top to bottom of sphere
+        // phi goes from ~20° to ~160° (avoiding poles)
+        const phi = (Math.PI * 0.12) + (Math.PI * 0.76) * (i / (TOTAL_RINGS - 1));
 
-      // Front layer
-      for (let i = 0; i < totalLines; i++) {
         const line = document.createElement('div');
         line.className = 'text-line';
         line.textContent = contentLines[i % contentLines.length];
+        line.dataset.phi = phi;
         line.dataset.index = i;
-        frontTextContainer.appendChild(line);
-      }
 
-      // Back layer (will be mirrored via CSS)
-      for (let i = 0; i < totalLines; i++) {
-        const line = document.createElement('div');
-        line.className = 'text-line';
-        line.textContent = contentLines[i % contentLines.length];
-        line.dataset.index = i;
-        backTextContainer.appendChild(line);
+        sphere.appendChild(line);
       }
     }
 
     createTextLines();
 
-    function updateTextPositions() {
-      const frontLines = frontTextContainer.querySelectorAll('.text-line');
-      const backLines = backTextContainer.querySelectorAll('.text-line');
-      const totalHeight = contentLines.length * LINE_HEIGHT;
+    let rotationX = -10;
+    let rotationY = 0;
+    let velocityX = 0;
+    let velocityY = 0.3;
+    let isDragging = false;
+    let lastMouseX = 0;
+    let lastMouseY = 0;
 
-      // Update front text
-      frontLines.forEach((line, index) => {
-        let y = (index * LINE_HEIGHT) - scrollY - totalHeight / 2;
+    function updateSphere() {
+      const lines = document.querySelectorAll('.text-line');
+      const radX = rotationX * Math.PI / 180;
+      const radY = rotationY * Math.PI / 180;
 
-        // Wrap around
-        while (y < -totalHeight) y += totalHeight;
-        while (y > totalHeight) y -= totalHeight;
+      lines.forEach(line => {
+        const phi = parseFloat(line.dataset.phi);
 
-        const normalizedDist = y / ORB_RADIUS;
+        // Position on sphere - theta is 0 (front-facing)
+        // We'll rotate the whole coordinate system instead
+        const baseY = RADIUS * Math.cos(phi);
+        const ringRadius = RADIUS * Math.sin(phi);
+        const baseX = 0;
+        const baseZ = ringRadius;
 
-        if (Math.abs(normalizedDist) > 0.95) {
-          line.style.opacity = 0;
-          return;
+        // Apply Y rotation (horizontal spin)
+        let x = baseX * Math.cos(radY) - baseZ * Math.sin(radY);
+        let z = baseX * Math.sin(radY) + baseZ * Math.cos(radY);
+        let y = baseY;
+
+        // Apply X rotation (vertical tilt)
+        const newY = y * Math.cos(radX) - z * Math.sin(radX);
+        const newZ = y * Math.sin(radX) + z * Math.cos(radX);
+        y = newY;
+        z = newZ;
+
+        // Calculate visual properties based on Z depth
+        const normalizedZ = (z + RADIUS) / (RADIUS * 2); // 0 = back, 1 = front
+
+        // Front text (z > 0): full opacity, larger
+        // Back text (z < 0): dimmer, smaller, appears reversed naturally via 3D
+        const isFront = z > 0;
+
+        let opacity, scale, fontSize;
+
+        if (isFront) {
+          // Front of sphere
+          opacity = 0.4 + normalizedZ * 0.6;
+          scale = 0.6 + normalizedZ * 0.5;
+          fontSize = 14 + normalizedZ * 10;
+        } else {
+          // Back of sphere - visible but dimmer
+          opacity = 0.1 + normalizedZ * 0.25;
+          scale = 0.4 + normalizedZ * 0.3;
+          fontSize = 12 + normalizedZ * 6;
         }
 
-        // Sphere surface calculation
-        const sphereZ = Math.sqrt(Math.max(0, 1 - normalizedDist * normalizedDist));
+        // Calculate the rotation needed for the text to face outward on the sphere
+        // then the natural 3D perspective will make back text appear reversed
+        const angleY = Math.atan2(x, z) * (180 / Math.PI);
 
-        // Fisheye effect - center text is larger
-        const scale = 0.4 + sphereZ * 0.9;
-        const fontSize = 14 + sphereZ * 10;
-
-        // Opacity - front text is bright in center, fades at edges
-        const opacity = Math.pow(sphereZ, 0.6);
-
-        line.style.transform = `translate(-50%, -50%) translateY(${y}px) scale(${scale})`;
+        line.style.transform = `
+          translate(-50%, -50%)
+          translate3d(${x}px, ${y}px, ${z}px)
+          rotateY(${angleY}deg)
+        `;
         line.style.opacity = opacity;
         line.style.fontSize = `${fontSize}px`;
-        line.style.zIndex = Math.round(sphereZ * 100);
-      });
-
-      // Update back text (offset and dimmer)
-      backLines.forEach((line, index) => {
-        // Offset the back text so it doesn't perfectly overlap
-        let y = (index * LINE_HEIGHT) - scrollY - totalHeight / 2 + LINE_HEIGHT * 0.5;
-
-        while (y < -totalHeight) y += totalHeight;
-        while (y > totalHeight) y -= totalHeight;
-
-        const normalizedDist = y / ORB_RADIUS;
-
-        if (Math.abs(normalizedDist) > 0.95) {
-          line.style.opacity = 0;
-          return;
-        }
-
-        const sphereZ = Math.sqrt(Math.max(0, 1 - normalizedDist * normalizedDist));
-
-        // Back text is smaller and dimmer
-        const scale = 0.35 + sphereZ * 0.5;
-        const fontSize = 12 + sphereZ * 6;
-
-        // Back text fades more aggressively
-        const opacity = Math.pow(sphereZ, 1.5) * 0.35;
-
-        line.style.transform = `translate(-50%, -50%) translateY(${y}px) scale(${scale})`;
-        line.style.opacity = opacity;
-        line.style.fontSize = `${fontSize}px`;
-        line.style.zIndex = Math.round(sphereZ * 10);
+        line.style.zIndex = Math.round(z + RADIUS);
       });
     }
 
     function animate() {
       if (!isDragging) {
-        scrollY += velocityY;
-        velocityY *= 0.998;
-        if (Math.abs(velocityY) < 0.25) velocityY = 0.25;
+        rotationY += velocityY;
+        rotationX += velocityX;
+
+        velocityX *= 0.96;
+        velocityY *= 0.995;
+
+        if (Math.abs(velocityY) < 0.2) velocityY = 0.2;
       }
 
-      const totalHeight = contentLines.length * LINE_HEIGHT;
-      if (scrollY > totalHeight) scrollY -= totalHeight;
-      if (scrollY < 0) scrollY += totalHeight;
+      rotationX = Math.max(-40, Math.min(40, rotationX));
 
-      updateTextPositions();
+      updateSphere();
       requestAnimationFrame(animate);
     }
 
     // Mouse controls
     scene.addEventListener('mousedown', (e) => {
       isDragging = true;
+      lastMouseX = e.clientX;
       lastMouseY = e.clientY;
+      velocityX = 0;
       velocityY = 0;
     });
 
     document.addEventListener('mousemove', (e) => {
       if (!isDragging) return;
+
+      const deltaX = e.clientX - lastMouseX;
       const deltaY = e.clientY - lastMouseY;
-      scrollY -= deltaY * 0.8;
-      velocityY = -deltaY * 0.3;
+
+      rotationY += deltaX * 0.4;
+      rotationX += deltaY * 0.3;
+
+      velocityY = deltaX * 0.15;
+      velocityX = deltaY * 0.1;
+
+      lastMouseX = e.clientX;
       lastMouseY = e.clientY;
     });
 
@@ -335,15 +326,25 @@
     // Touch support
     scene.addEventListener('touchstart', (e) => {
       isDragging = true;
+      lastMouseX = e.touches[0].clientX;
       lastMouseY = e.touches[0].clientY;
+      velocityX = 0;
       velocityY = 0;
     });
 
     document.addEventListener('touchmove', (e) => {
       if (!isDragging) return;
+
+      const deltaX = e.touches[0].clientX - lastMouseX;
       const deltaY = e.touches[0].clientY - lastMouseY;
-      scrollY -= deltaY * 0.8;
-      velocityY = -deltaY * 0.3;
+
+      rotationY += deltaX * 0.4;
+      rotationX += deltaY * 0.3;
+
+      velocityY = deltaX * 0.15;
+      velocityX = deltaY * 0.1;
+
+      lastMouseX = e.touches[0].clientX;
       lastMouseY = e.touches[0].clientY;
     });
 
