@@ -45,7 +45,6 @@
       height: 100%;
       position: relative;
       transform-style: preserve-3d;
-      transition: transform 0.1s ease-out;
     }
 
     /* The glass orb effect */
@@ -59,15 +58,15 @@
       border-radius: 50%;
       background: radial-gradient(
         ellipse at 30% 30%,
-        rgba(255, 255, 255, 0.15) 0%,
-        rgba(255, 255, 255, 0.05) 30%,
-        rgba(0, 0, 0, 0.1) 60%,
-        rgba(0, 0, 0, 0.3) 100%
+        rgba(255, 255, 255, 0.12) 0%,
+        rgba(255, 255, 255, 0.03) 30%,
+        rgba(0, 0, 0, 0.05) 60%,
+        rgba(0, 0, 0, 0.2) 100%
       );
       box-shadow:
-        inset -20px -20px 40px rgba(0, 0, 0, 0.5),
-        inset 20px 20px 40px rgba(255, 255, 255, 0.1),
-        0 0 60px rgba(255, 255, 255, 0.1);
+        inset -20px -20px 40px rgba(0, 0, 0, 0.4),
+        inset 20px 20px 40px rgba(255, 255, 255, 0.08),
+        0 0 60px rgba(255, 255, 255, 0.05);
       pointer-events: none;
       z-index: 100;
     }
@@ -81,35 +80,31 @@
       height: 20%;
       background: radial-gradient(
         ellipse,
-        rgba(255, 255, 255, 0.3) 0%,
+        rgba(255, 255, 255, 0.25) 0%,
         transparent 70%
       );
       border-radius: 50%;
       filter: blur(10px);
     }
 
-    /* Text rings around the orb */
+    /* Text ring container */
     .text-ring {
       position: absolute;
       top: 50%;
       left: 50%;
+      width: 0;
+      height: 0;
       transform-style: preserve-3d;
-      pointer-events: none;
     }
 
-    .text-item {
+    /* Individual character */
+    .char {
       position: absolute;
       color: #fff;
-      font-size: 18px;
+      font-size: 16px;
       font-weight: 500;
-      white-space: nowrap;
-      transform-origin: center center;
-      text-shadow: 0 0 10px rgba(0,0,0,0.8);
+      transform-style: preserve-3d;
       backface-visibility: hidden;
-    }
-
-    .text-item.back {
-      opacity: 0.3;
     }
 
     /* Header */
@@ -172,7 +167,7 @@
 
   <div class="scene" id="scene">
     <div class="orb-container" id="orbContainer">
-      <!-- Text will be added by JavaScript -->
+      <!-- Text rings will be added by JavaScript -->
     </div>
     <div class="orb"></div>
   </div>
@@ -187,102 +182,114 @@
     const orbContainer = document.getElementById('orbContainer');
     const scene = document.getElementById('scene');
 
-    // Content items to display around the orb
+    // Content items - each will wrap around a ring of the sphere
     const contentItems = [
-      "Earn 1% Shop Cash exclusively on purchases",
-      "Made in the Shop app with extended expiry",
-      "Updates, making rewards more accessible",
-      "And valuable for your customers.",
-      "Custom Shop app URLs",
-      "Create fully functional admin applications",
-      "Through simple conversations with Sidekick",
-      "Starting with custom discount functions",
-      "No coding knowledge required.",
-      "Payment method customization",
-      "Shop Cash rewards program",
-      "Extended warranty options",
-      "Flexible inventory transfers",
-      "Updated metrics and widgets",
-      "Monitor your store from your wrist"
+      "Shop Cash rewards program • Extended warranty options • Flexible inventory transfers •",
+      "Payment method customization • Custom Shop app URLs • Updated metrics and widgets •",
+      "Earn 1% Shop Cash exclusively on purchases • Made in the Shop app with extended expiry •",
+      "Create fully functional admin applications • Through simple conversations with Sidekick •",
+      "Starting with custom discount functions • No coding knowledge required •",
+      "Updates making rewards more accessible • And valuable for your customers •",
+      "Monitor your store from your wrist • Real-time analytics dashboard •"
     ];
 
-    const RADIUS = 250;
-    const RINGS = 5;
-    const ITEMS_PER_RING = 3;
+    const RADIUS = 200;
+    const CHAR_WIDTH = 10; // Approximate character width for spacing
 
-    // Create text elements arranged in rings around the sphere
-    function createTextElements() {
-      contentItems.forEach((text, index) => {
-        const ringIndex = Math.floor(index / ITEMS_PER_RING);
-        const itemInRing = index % ITEMS_PER_RING;
+    // Create text wrapped around rings
+    function createTextRings() {
+      contentItems.forEach((text, ringIndex) => {
+        // Vertical position (latitude) - distribute rings from top to bottom
+        const phi = (Math.PI / (contentItems.length + 1)) * (ringIndex + 1);
 
-        // Vertical position (latitude)
-        const phi = (Math.PI / (RINGS + 1)) * (ringIndex + 1);
-
-        // Horizontal position (longitude)
-        const theta = (2 * Math.PI / ITEMS_PER_RING) * itemInRing + (ringIndex * 0.5);
-
-        const x = RADIUS * Math.sin(phi) * Math.cos(theta);
+        // Calculate the radius of this ring (smaller near poles)
+        const ringRadius = RADIUS * Math.sin(phi);
         const y = RADIUS * Math.cos(phi);
-        const z = RADIUS * Math.sin(phi) * Math.sin(theta);
 
-        const textEl = document.createElement('div');
-        textEl.className = 'text-item';
-        textEl.textContent = text;
-        textEl.dataset.x = x;
-        textEl.dataset.y = y;
-        textEl.dataset.z = z;
-        textEl.dataset.theta = theta;
-        textEl.dataset.phi = phi;
+        // Calculate circumference and how many characters fit
+        const circumference = 2 * Math.PI * ringRadius;
+        const charAngle = CHAR_WIDTH / ringRadius; // Angle per character
 
-        orbContainer.appendChild(textEl);
+        // Create a ring container
+        const ring = document.createElement('div');
+        ring.className = 'text-ring';
+        ring.dataset.phi = phi;
+        ring.dataset.y = y;
+        ring.dataset.ringRadius = ringRadius;
+
+        // Place each character around the ring
+        const chars = text.split('');
+        chars.forEach((char, charIndex) => {
+          const theta = charIndex * charAngle;
+
+          const charEl = document.createElement('span');
+          charEl.className = 'char';
+          charEl.textContent = char;
+          charEl.dataset.theta = theta;
+          charEl.dataset.charIndex = charIndex;
+
+          ring.appendChild(charEl);
+        });
+
+        orbContainer.appendChild(ring);
       });
     }
 
-    createTextElements();
+    createTextRings();
 
     // Rotation state
-    let rotationX = -15;
+    let rotationX = -20;
     let rotationY = 0;
     let velocityX = 0;
-    let velocityY = 0.2; // Auto-rotate
+    let velocityY = 0.3; // Auto-rotate
     let isDragging = false;
     let lastMouseX = 0;
     let lastMouseY = 0;
 
-    function updateTextPositions() {
-      const textItems = document.querySelectorAll('.text-item');
+    function updatePositions() {
       const radX = rotationX * Math.PI / 180;
       const radY = rotationY * Math.PI / 180;
 
-      textItems.forEach(item => {
-        const origX = parseFloat(item.dataset.x);
-        const origY = parseFloat(item.dataset.y);
-        const origZ = parseFloat(item.dataset.z);
+      const rings = document.querySelectorAll('.text-ring');
 
-        // Rotate around Y axis
-        let x = origX * Math.cos(radY) - origZ * Math.sin(radY);
-        let z = origX * Math.sin(radY) + origZ * Math.cos(radY);
-        let y = origY;
+      rings.forEach(ring => {
+        const phi = parseFloat(ring.dataset.phi);
+        const ringRadius = parseFloat(ring.dataset.ringRadius);
+        const baseY = parseFloat(ring.dataset.y);
 
-        // Rotate around X axis
-        const tempY = y * Math.cos(radX) - z * Math.sin(radX);
-        const tempZ = y * Math.sin(radX) + z * Math.cos(radX);
-        y = tempY;
-        z = tempZ;
+        const chars = ring.querySelectorAll('.char');
 
-        // Position and scale based on Z (depth)
-        const scale = (z + RADIUS * 1.5) / (RADIUS * 2);
-        const opacity = Math.max(0.1, Math.min(1, (z + RADIUS) / (RADIUS * 2)));
+        chars.forEach(charEl => {
+          const theta = parseFloat(charEl.dataset.theta) + radY;
 
-        item.style.transform = `translate(-50%, -50%) translate3d(${x}px, ${y}px, ${z}px) scale(${0.5 + scale * 0.5})`;
-        item.style.opacity = opacity;
-        item.style.zIndex = Math.round(z + RADIUS);
+          // Position on the ring
+          const x = ringRadius * Math.cos(theta);
+          const z = ringRadius * Math.sin(theta);
+          let y = baseY;
 
-        // Fade text on back of sphere
-        if (z < -50) {
-          item.style.opacity = Math.max(0.1, opacity * 0.3);
-        }
+          // Apply X rotation (tilt)
+          const rotatedY = y * Math.cos(radX) - z * Math.sin(radX);
+          const rotatedZ = y * Math.sin(radX) + z * Math.cos(radX);
+
+          // Calculate opacity based on depth
+          const depth = rotatedZ;
+          const normalizedDepth = (depth + RADIUS) / (RADIUS * 2);
+          const opacity = Math.max(0.05, Math.min(1, normalizedDepth * 1.2));
+
+          // Scale based on depth for perspective
+          const scale = 0.6 + normalizedDepth * 0.5;
+
+          // Rotation to face outward (tangent to sphere)
+          const faceAngle = theta * (180 / Math.PI);
+
+          charEl.style.transform = `
+            translate3d(${x}px, ${rotatedY}px, ${rotatedZ}px)
+            rotateY(${faceAngle + 90}deg)
+            scale(${scale})
+          `;
+          charEl.style.opacity = opacity;
+          charEl.style.zIndex = Math.round(rotatedZ + RADIUS);
+        });
       });
     }
 
@@ -294,18 +301,16 @@
 
         // Dampen velocity
         velocityX *= 0.98;
-        velocityY *= 0.995;
+        velocityY *= 0.998;
 
         // Minimum auto-rotation
-        if (Math.abs(velocityY) < 0.1) velocityY = 0.1;
+        if (Math.abs(velocityY) < 0.15) velocityY = 0.15;
       }
 
       // Clamp X rotation
       rotationX = Math.max(-60, Math.min(60, rotationX));
 
-      orbContainer.style.transform = `rotateX(${rotationX}deg) rotateY(${rotationY}deg)`;
-      updateTextPositions();
-
+      updatePositions();
       requestAnimationFrame(animate);
     }
 
