@@ -36,7 +36,7 @@
     .scene {
       width: 600px;
       height: 600px;
-      perspective: 1000px;
+      perspective: 1200px;
       position: relative;
     }
 
@@ -47,44 +47,55 @@
       transform-style: preserve-3d;
     }
 
-    /* The glass orb effect */
+    /* The glass orb effect - subtle, see-through */
     .orb {
       position: absolute;
       top: 50%;
       left: 50%;
-      width: 400px;
-      height: 400px;
+      width: 420px;
+      height: 420px;
       transform: translate(-50%, -50%);
       border-radius: 50%;
       background: radial-gradient(
         ellipse at 30% 30%,
-        rgba(255, 255, 255, 0.12) 0%,
-        rgba(255, 255, 255, 0.03) 30%,
-        rgba(0, 0, 0, 0.05) 60%,
-        rgba(0, 0, 0, 0.2) 100%
+        rgba(255, 255, 255, 0.08) 0%,
+        rgba(255, 255, 255, 0.02) 40%,
+        transparent 70%
       );
       box-shadow:
-        inset -20px -20px 40px rgba(0, 0, 0, 0.4),
-        inset 20px 20px 40px rgba(255, 255, 255, 0.08),
-        0 0 60px rgba(255, 255, 255, 0.05);
+        inset 0 0 80px rgba(255, 255, 255, 0.03),
+        0 0 40px rgba(255, 255, 255, 0.02);
       pointer-events: none;
-      z-index: 100;
+      z-index: 1000;
     }
 
+    /* Highlight reflection */
     .orb::before {
       content: '';
       position: absolute;
-      top: 10%;
-      left: 15%;
-      width: 30%;
-      height: 20%;
+      top: 8%;
+      left: 12%;
+      width: 35%;
+      height: 25%;
       background: radial-gradient(
         ellipse,
-        rgba(255, 255, 255, 0.25) 0%,
+        rgba(255, 255, 255, 0.15) 0%,
         transparent 70%
       );
       border-radius: 50%;
-      filter: blur(10px);
+      filter: blur(8px);
+    }
+
+    /* Subtle edge */
+    .orb::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 255, 255, 0.06);
     }
 
     /* Text ring container */
@@ -101,10 +112,10 @@
     .char {
       position: absolute;
       color: #fff;
-      font-size: 16px;
+      font-size: 14px;
       font-weight: 500;
+      letter-spacing: 0.5px;
       transform-style: preserve-3d;
-      backface-visibility: hidden;
     }
 
     /* Header */
@@ -182,19 +193,19 @@
     const orbContainer = document.getElementById('orbContainer');
     const scene = document.getElementById('scene');
 
-    // Content items - each will wrap around a ring of the sphere
+    // Content items - shorter phrases that wrap around rings
     const contentItems = [
-      "Shop Cash rewards program • Extended warranty options • Flexible inventory transfers •",
-      "Payment method customization • Custom Shop app URLs • Updated metrics and widgets •",
-      "Earn 1% Shop Cash exclusively on purchases • Made in the Shop app with extended expiry •",
-      "Create fully functional admin applications • Through simple conversations with Sidekick •",
-      "Starting with custom discount functions • No coding knowledge required •",
-      "Updates making rewards more accessible • And valuable for your customers •",
-      "Monitor your store from your wrist • Real-time analytics dashboard •"
+      "Shop Cash rewards • Extended warranty • Flexible transfers • Shop Cash rewards • Extended warranty •",
+      "Payment customization • Custom URLs • Updated metrics • Payment customization • Custom URLs •",
+      "Earn 1% Shop Cash • Made in Shop app • Extended expiry • Earn 1% Shop Cash • Made in Shop app •",
+      "Admin applications • Sidekick conversations • Custom functions • Admin applications • Sidekick •",
+      "Discount functions • No coding required • Accessible rewards • Discount functions • No coding •",
+      "Rewards accessible • Valuable customers • Monitor store • Rewards accessible • Valuable customers •",
+      "From your wrist • Analytics dashboard • Real-time data • From your wrist • Analytics dashboard •"
     ];
 
     const RADIUS = 200;
-    const CHAR_WIDTH = 10; // Approximate character width for spacing
+    const CHAR_WIDTH = 9;
 
     // Create text wrapped around rings
     function createTextRings() {
@@ -206,9 +217,8 @@
         const ringRadius = RADIUS * Math.sin(phi);
         const y = RADIUS * Math.cos(phi);
 
-        // Calculate circumference and how many characters fit
-        const circumference = 2 * Math.PI * ringRadius;
-        const charAngle = CHAR_WIDTH / ringRadius; // Angle per character
+        // Angle per character
+        const charAngle = CHAR_WIDTH / ringRadius;
 
         // Create a ring container
         const ring = document.createElement('div');
@@ -238,10 +248,10 @@
     createTextRings();
 
     // Rotation state
-    let rotationX = -20;
+    let rotationX = -15;
     let rotationY = 0;
     let velocityX = 0;
-    let velocityY = 0.3; // Auto-rotate
+    let velocityY = 0.25;
     let isDragging = false;
     let lastMouseX = 0;
     let lastMouseY = 0;
@@ -272,14 +282,25 @@
           const rotatedZ = y * Math.sin(radX) + z * Math.cos(radX);
 
           // Calculate opacity based on depth
-          const depth = rotatedZ;
-          const normalizedDepth = (depth + RADIUS) / (RADIUS * 2);
-          const opacity = Math.max(0.05, Math.min(1, normalizedDepth * 1.2));
+          // Front text is brighter, back text is dimmer but still visible
+          const normalizedDepth = (rotatedZ + RADIUS) / (RADIUS * 2);
+
+          // Back text (z < 0) should be visible but dimmer
+          // Front text (z > 0) should be bright
+          let opacity;
+          if (rotatedZ < 0) {
+            // Back of sphere - visible but faded
+            opacity = 0.15 + normalizedDepth * 0.2;
+          } else {
+            // Front of sphere - full visibility
+            opacity = 0.4 + normalizedDepth * 0.6;
+          }
 
           // Scale based on depth for perspective
-          const scale = 0.6 + normalizedDepth * 0.5;
+          const scale = 0.7 + normalizedDepth * 0.4;
 
           // Rotation to face outward (tangent to sphere)
+          // Back text will naturally appear mirrored because we see it from behind
           const faceAngle = theta * (180 / Math.PI);
 
           charEl.style.transform = `
@@ -288,6 +309,8 @@
             scale(${scale})
           `;
           charEl.style.opacity = opacity;
+
+          // Z-index: back text should be behind front text
           charEl.style.zIndex = Math.round(rotatedZ + RADIUS);
         });
       });
@@ -295,19 +318,15 @@
 
     function animate() {
       if (!isDragging) {
-        // Apply auto-rotation and momentum
         rotationY += velocityY;
         rotationX += velocityX;
 
-        // Dampen velocity
         velocityX *= 0.98;
         velocityY *= 0.998;
 
-        // Minimum auto-rotation
         if (Math.abs(velocityY) < 0.15) velocityY = 0.15;
       }
 
-      // Clamp X rotation
       rotationX = Math.max(-60, Math.min(60, rotationX));
 
       updatePositions();
@@ -372,7 +391,6 @@
       isDragging = false;
     });
 
-    // Start animation
     animate();
   </script>
 </body>
